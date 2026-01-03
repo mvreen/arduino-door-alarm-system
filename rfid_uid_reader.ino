@@ -1,44 +1,73 @@
-#include <SPI.h>
-#include <MFRC522.h>
+#include <Keypad.h>
 
-// RC522 pin tanımlamaları
-#define SS_PIN 10   // SDA (SS) pini
-#define RST_PIN 9   // RST pini
+const byte ROWS = 4; 
+const byte COLS = 3;
 
-MFRC522 rfid(SS_PIN, RST_PIN);
+char keys[ROWS][COLS] = {
+  {'1','2','3'},
+  {'4','5','6'},
+  {'7','8','9'},
+  {'*','0','#'}
+};
+
+byte rowPins[ROWS] = {2, 3, 4, 5}; 
+byte colPins[COLS] = {6, 7, 8};    
+
+Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
+
+const int buzzerPin = 10;
+const int doorSensorPin = 11;
+
+String password = "1453";
+String input = "";
+
+bool alarmTriggered = false;
+bool kapiOncekiDurum = false;
 
 void setup() {
-  Serial.begin(9600);     // Seri haberleşme başlat
-  SPI.begin();            // SPI başlat
-  rfid.PCD_Init();        // RFID modülünü başlat
-  delay(1000);            // Başlangıç gecikmesi
-
-  Serial.println("RFID sistemi hazır. Kart okutun.");
+  Serial.begin(9600);
+  pinMode(buzzerPin, OUTPUT);
+  pinMode(doorSensorPin, INPUT_PULLUP); // Kapı kapalıyken LOW
 }
 
 void loop() {
-  // Yeni kart yoksa veya okunamazsa çık
-  if (!rfid.PICC_IsNewCardPresent() || !rfid.PICC_ReadCardSerial()) {
-    return;
+  bool kapiAcik = digitalRead(doorSensorPin) == HIGH;
+
+  // Kapı yeni açıldıysa alarmı tetikle
+  if (kapiAcik && !kapiOncekiDurum) {
+    Serial.println("Kapı açıldı! Alarm aktif!");
+    alarmTriggered = true;
   }
 
-  // Kart UID'sini oku
-  String uid = "";
-  for (byte i = 0; i < rfid.uid.size; i++) {
-    if (rfid.uid.uidByte[i] < 0x10) {
-      uid += "0";  // Tek haneli hex değerler için başa 0 ekle
+  kapiOncekiDurum = kapiAcik;
+
+  // Alarm durumu
+  if (alarmTriggered) {
+    tone(buzzerPin, 1000);
+  } else {
+    noTone(buzzerPin);
+  }
+
+  // Keypad okuma
+  char key = keypad.getKey();
+  if (key) {
+    Serial.print("Tuş: ");
+    Serial.println(key);
+
+    if (key == '#') {  // Şifre kontrol
+      if (input == password) {
+        Serial.println("Şifre doğru. Alarm kapatıldı.");
+        alarmTriggered = false;
+      } else {
+        Serial.println("Yanlış şifre!");
+      }
+      input = "";
+    } 
+    else if (key == '*') {
+      input = ""; // Giriş temizle
+    } 
+    else {
+      input += key;
     }
-    uid += String(rfid.uid.uidByte[i], HEX);
   }
-
-  uid.toUpperCase();       // UID'yi büyük harfe çevir
-  Serial.print("Kart UID: ");
-  Serial.println(uid);
-
-  // Kartla iş bittikten sonra durdur
-  rfid.PICC_HaltA();
-  rfid.PCD_StopCrypto1();
-
-  delay(1000);  // Aynı kartın üst üste okunmasını engelle
 }
-
