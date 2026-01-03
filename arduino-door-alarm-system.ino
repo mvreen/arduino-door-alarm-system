@@ -20,26 +20,24 @@ const int doorSensorPin = 11;
 
 String password = "1453";
 String input = "";
-
 bool alarmTriggered = false;
-bool kapiOncekiDurum = false;
+bool kapiAcik = false; // Kapının mevcut durumu
+bool kapiOncekiDurum = true; // HIGH = kapalı
 
 void setup() {
   Serial.begin(9600);
   pinMode(buzzerPin, OUTPUT);
-  pinMode(doorSensorPin, INPUT_PULLUP); // Kapı kapalıyken LOW
+  pinMode(doorSensorPin, INPUT_PULLUP); // Kapalıyken HIGH
 }
 
 void loop() {
-  bool kapiAcik = digitalRead(doorSensorPin) == HIGH;
+  kapiAcik = digitalRead(doorSensorPin) == HIGH;
 
-  // Kapı yeni açıldıysa alarmı tetikle
-  if (kapiAcik && !kapiOncekiDurum) {
+  // Kapı yeni açıldıysa (önce kapalıydı, şimdi açık)
+  if (kapiAcik && kapiOncekiDurum == true) {
     Serial.println("Kapı açıldı! Alarm aktif!");
     alarmTriggered = true;
   }
-
-  kapiOncekiDurum = kapiAcik;
 
   // Alarm durumu
   if (alarmTriggered) {
@@ -48,26 +46,25 @@ void loop() {
     noTone(buzzerPin);
   }
 
-  // Keypad okuma
+  // Şifre girişi
   char key = keypad.getKey();
   if (key) {
     Serial.print("Tuş: ");
     Serial.println(key);
-
-    if (key == '#') {  // Şifre kontrol
+    if (key == '#') {
       if (input == password) {
-        Serial.println("Şifre doğru. Alarm kapatıldı.");
+        Serial.println("Doğru şifre! Alarm sustu.");
         alarmTriggered = false;
       } else {
         Serial.println("Yanlış şifre!");
       }
       input = "";
-    } 
-    else if (key == '*') {
-      input = ""; // Giriş temizle
-    } 
-    else {
+    } else {
       input += key;
     }
   }
+
+  // Önceki kapı durumu güncellenir (bir sonraki loop için)
+  kapiOncekiDurum = !kapiAcik; // true = kapalı, false = açık
+  
 }
